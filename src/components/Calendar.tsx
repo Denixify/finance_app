@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import type { Transaction } from "./types";
+import type { Transaction } from "../types";
 import { useLang } from "./LanguageContext";
 
 interface CalendarProps {

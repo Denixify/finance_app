@@ -1,8 +1,8 @@
 import { useMemo, useState } from "react";
-import type { Transaction } from "./types";
+import type { Transaction } from "../types";
 import { ChartsSection } from "./ChartsSection";
 import type { LineChartItem, PieChartItem } from "./ChartsSection";
-import { monthKey } from "./dateUtils";
+import { monthKey } from "../dateUtils";
 import { useLang } from "./LanguageContext";
 
 interface AnalyticsTabProps {

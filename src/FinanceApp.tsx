@@ -2,17 +2,18 @@ import { useState, useMemo, useEffect, useRef } from "react";
 import type { ChangeEvent } from "react";
 import "./FinanceApp.scss";
 import type { Transaction } from "./types";
-import { SummaryCards } from "./SummaryCards";
-import { ChartsSection, type LineChartItem } from "./ChartsSection";
-import { TransactionForm } from "./TransactionForm";
-import { TransactionList } from "./TransactionList";
-import { TransactionItem } from "./TransactionItem";
-import { Calendar } from "./Calendar";
-import { TabBar } from "./TabBar";
-import type { AppTab } from "./TabBar";
-import { BottomSheet } from "./BottomSheet";
-import { AnalyticsTab } from "./AnalyticsTab";
-import { useLang } from "./LanguageContext";
+import { SummaryCards } from "./components/SummaryCards";
+import { ChartsSection, type LineChartItem } from "./components/ChartsSection";
+import { TransactionForm } from "./components/TransactionForm";
+import { TransactionList } from "./components/TransactionList";
+import { TransactionItem } from "./components/TransactionItem";
+import { Calendar } from "./components/Calendar";
+import { TabBar } from "./components/TabBar";
+import type { AppTab } from "./components/TabBar";
+import { BottomSheet } from "./components/BottomSheet";
+import { AnalyticsTab } from "./components/AnalyticsTab";
+import { useLang } from "./components/LanguageContext";
+import { MinesweeperApp } from "./EasterEgg/MinesweeperApp";
 
 const STORAGE_KEY = "finance-app:transactions";
 
@@ -41,6 +42,8 @@ export function FinanceApp() {
     useState<Transaction | null>(null);
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [isMinesweeperOpen, setIsMinesweeperOpen] = useState(false);
+
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
 
@@ -62,9 +65,10 @@ export function FinanceApp() {
 
   const lineChartData = useMemo(() => {
     const grouped = transactions.reduce(
-      (acc, t) => {
-        if (!acc[t.date]) acc[t.date] = { date: t.date, income: 0, expense: 0 };
-        acc[t.date][t.type] += t.amount;
+      (acc, tx) => {
+        if (!acc[tx.date])
+          acc[tx.date] = { date: tx.date, income: 0, expense: 0 };
+        acc[tx.date][tx.type] += tx.amount;
         return acc;
       },
       {} as Record<string, { date: string; income: number; expense: number }>,
@@ -82,16 +86,16 @@ export function FinanceApp() {
   }, [transactions]);
 
   const pieChartData = useMemo(() => {
-    const expenses = transactions.filter((t) => t.type === "expense");
+    const expenses = transactions.filter((tx) => tx.type === "expense");
     const grouped = expenses.reduce(
-      (acc, t) => {
-        const cleanCategory = t.category.trim();
+      (acc, tx) => {
+        const cleanCategory = tx.category.trim();
         const normalizedCat =
           cleanCategory.charAt(0).toUpperCase() +
           cleanCategory.slice(1).toLowerCase();
         if (!acc[normalizedCat])
           acc[normalizedCat] = { name: normalizedCat, value: 0 };
-        acc[normalizedCat].value += t.amount;
+        acc[normalizedCat].value += tx.amount;
         return acc;
       },
       {} as Record<string, { name: string; value: number }>,
@@ -101,7 +105,7 @@ export function FinanceApp() {
 
   const dayTransactions = useMemo(() => {
     if (!selectedDate) return [];
-    return transactions.filter((t) => t.date === selectedDate);
+    return transactions.filter((tx) => tx.date === selectedDate);
   }, [transactions, selectedDate]);
 
   const openAddForm = () => {
@@ -216,7 +220,6 @@ export function FinanceApp() {
             type="button"
             className="lang-toggle-btn"
             onClick={toggleLang}
-            aria-label="Змінити мову / Сменить язык"
           >
             {t.langToggle}
           </button>
@@ -270,14 +273,14 @@ export function FinanceApp() {
                     <p className="day-empty">{t.dayEmpty}</p>
                   ) : (
                     <div className="transactions-list">
-                      {dayTransactions.map((t) => (
+                      {dayTransactions.map((tx) => (
                         <TransactionItem
-                          key={t.id}
-                          transaction={t}
+                          key={tx.id}
+                          transaction={tx}
                           onEdit={openEditForm}
                           onDelete={handleDelete}
-                          isDeleting={deletingIds.includes(t.id)}
-                          isEditing={editingTransaction?.id === t.id}
+                          isDeleting={deletingIds.includes(tx.id)}
+                          isEditing={editingTransaction?.id === tx.id}
                         />
                       ))}
                     </div>
@@ -357,11 +360,36 @@ export function FinanceApp() {
           <button type="button" className="btn-danger" onClick={handleClearAll}>
             {t.btnClear}
           </button>
+
+          <button
+            type="button"
+            className="btn-easter-egg"
+            onClick={() => {
+              setIsSettingsOpen(false);
+              setTimeout(() => setIsMinesweeperOpen(true), 300);
+            }}
+          >
+            {t.btnEasterEgg}
+          </button>
+
           <p className="settings-meta">
             {t.settingsMeta} {transactions.length}
           </p>
         </div>
       </BottomSheet>
+
+      {isMinesweeperOpen && (
+        <div className="minesweeper-overlay">
+          <button
+            type="button"
+            className="minesweeper-close"
+            onClick={() => setIsMinesweeperOpen(false)}
+          >
+            {t.btnEasterEggClose}
+          </button>
+          <MinesweeperApp />
+        </div>
+      )}
     </div>
   );
 }

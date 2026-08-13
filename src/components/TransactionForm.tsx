@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import type { Transaction, TransactionType } from "./types";
+import type { Transaction, TransactionType } from "../types";
 import { useLang } from "./LanguageContext";
 
 interface TransactionFormProps {

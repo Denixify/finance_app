@@ -1,5 +1,4 @@
 /* eslint-disable react-refresh/only-export-components */
-
 import {
   createContext,
   useContext,
@@ -10,7 +9,7 @@ import {
 
 type Language = "uk" | "ru";
 
-export const translations = {
+const translations = {
   uk: {
     title: "📊 Фінанси",
     langToggle: "РУС",
@@ -72,6 +71,8 @@ export const translations = {
       "Не вдалося прочитати файл — перевірте, що це коректний backup.",
     alertClear:
       "Видалити всі записи безповоротно? Рекомендуємо спершу зробити експорт.",
+    btnEasterEgg: "🎮 Відпочити",
+    btnEasterEggClose: "✕ Закрити",
 
     calReset: "Скинути дату",
     calToday: "Сьогодні",
@@ -167,13 +168,15 @@ export const translations = {
       "Не удалось прочитать файл — проверьте, что это корректный бэкап.",
     alertClear:
       "Удалить все записи безвозвратно? Рекомендуем сначала сделать экспорт.",
+    btnEasterEgg: "🎮 Отдохнуть",
+    btnEasterEggClose: "✕ Закрыть",
 
     calReset: "Сбросить дату",
     calToday: "Сегодня",
     dayEmpty: "Нет записей на эту дату",
     daySelectPrompt:
       "Выберите дату в календаре, чтобы посмотреть или добавить запись",
-
+    
     catExpense: [
       "Продукты",
       "Телефония",
