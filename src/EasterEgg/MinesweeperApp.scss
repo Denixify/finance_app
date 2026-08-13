@@ -29,7 +29,8 @@
   display: flex;
   justify-content: center;
   align-items: center;
-  background-color: #3a6ea5;
+  padding-bottom: 20px;
+  background-color: transparent;
   font-family: "Tahoma", sans-serif;
 }
 
@@ -40,6 +41,7 @@
   border-left: 2px solid #fff;
   border-right: 2px solid #7b7b7b;
   border-bottom: 2px solid #7b7b7b;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
 }
 
 .ms-title-bar {
@@ -49,6 +51,38 @@
   font-weight: bold;
   font-size: 12px;
   margin-bottom: 10px;
+}
+
+.ms-mode-toggle {
+  display: flex;
+  justify-content: space-between;
+  gap: 6px;
+  margin-bottom: 8px;
+}
+
+.ms-mode-btn {
+  flex: 1;
+  background-color: #bdbdbd;
+  border-top: 2px solid #fff;
+  border-left: 2px solid #fff;
+  border-right: 2px solid #7b7b7b;
+  border-bottom: 2px solid #7b7b7b;
+  padding: 6px;
+  font-size: 12px;
+  font-weight: bold;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+
+  &.active {
+    border-top: 2px solid #7b7b7b;
+    border-left: 2px solid #7b7b7b;
+    border-right: 2px solid #fff;
+    border-bottom: 2px solid #fff;
+    background-color: #a0a0a0;
+  }
 }
 
 .ms-board {
@@ -82,6 +116,9 @@
   font-size: 20px;
   cursor: pointer;
 
+  -webkit-user-select: none;
+  user-select: none;
+
   &:active {
     border: 1px solid #7b7b7b;
   }
@@ -111,8 +148,7 @@
 .ms-digital-display {
   background-color: black;
   color: red;
-  font-family:
-    "Courier New", Courier, monospace;
+  font-family: "Courier New", Courier, monospace;
   font-size: 24px;
   font-weight: bold;
   padding: 2px 4px;

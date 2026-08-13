@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from "react";
 import "./MinesweeperApp.scss";
+import { useLang } from "../components/LanguageContext";
 
 const ROWS = 9;
 const COLS = 9;
@@ -33,77 +34,101 @@ const createEmptyBoard = (): CellData[][] => {
   return board;
 };
 
+const plantMines = (
+  board: CellData[][],
+  firstRow: number,
+  firstCol: number,
+) => {
+  let minesPlanted = 0;
+
+  while (minesPlanted < MINES) {
+    const randomRow = Math.floor(Math.random() * ROWS);
+    const randomCol = Math.floor(Math.random() * COLS);
+
+    const isNotFirstClick = randomRow !== firstRow || randomCol !== firstCol;
+    const hasNoMine = !board[randomRow][randomCol].isMine;
+
+    if (isNotFirstClick && hasNoMine) {
+      board[randomRow][randomCol].isMine = true;
+      minesPlanted++;
+    }
+  }
+};
+
+const calculateAdjacentMines = (board: CellData[][]) => {
+  const directions = [
+    [-1, -1],
+    [-1, 0],
+    [-1, 1],
+    [0, -1],
+    [0, 1],
+    [1, -1],
+    [1, 0],
+    [1, 1],
+  ];
+
+  for (let r = 0; r < ROWS; r++) {
+    for (let c = 0; c < COLS; c++) {
+      if (board[r][c].isMine) continue;
+
+      let minesCount = 0;
+
+      for (const [dRow, dCol] of directions) {
+        const newRow = r + dRow;
+        const newCol = c + dCol;
+
+        if (newRow >= 0 && newRow < ROWS && newCol >= 0 && newCol < COLS) {
+          if (board[newRow][newCol].isMine) {
+            minesCount++;
+          }
+        }
+      }
+      board[r][c].adjacentMines = minesCount;
+    }
+  }
+};
+
 export function MinesweeperApp() {
+  const { t } = useLang();
+
   const [board, setBoard] = useState<CellData[][]>(createEmptyBoard());
   const [isFirstClick, setIsFirstClick] = useState(true);
   const [gameOver, setGameOver] = useState(false);
   const [gameWon, setGameWon] = useState(false);
   const [time, setTime] = useState(0);
 
-  const plantMines = (
-    board: CellData[][],
-    firstRow: number,
-    firstCol: number,
-  ) => {
-    let minesPlanted = 0;
+  const [isFlagMode, setIsFlagMode] = useState(false);
 
-    while (minesPlanted < MINES) {
-      const randomRow = Math.floor(Math.random() * ROWS);
-      const randomCol = Math.floor(Math.random() * COLS);
+  const toggleFlag = (r: number, c: number) => {
+    if (gameOver || gameWon || board[r][c].isRevealed) return;
 
-      const isNotFirstClick = randomRow !== firstRow || randomCol !== firstCol;
-      const hasNoMine = !board[randomRow][randomCol].isMine;
+    const isCurrentlyFlagged = board[r][c].isFlagged;
 
-      if (isNotFirstClick && hasNoMine) {
-        board[randomRow][randomCol].isMine = true;
-        minesPlanted++;
+    if (!isCurrentlyFlagged) {
+      const flaggedCount = board.reduce(
+        (acc, row) => acc + row.filter((cell) => cell.isFlagged).length,
+        0,
+      );
+
+      if (flaggedCount >= MINES) {
+        return;
       }
     }
-  };
 
-  const calculateAdjacentMines = (board: CellData[][]) => {
-    const directions = [
-      [-1, -1],
-      [-1, 0],
-      [-1, 1],
-      [0, -1],
-      [0, 1],
-      [1, -1],
-      [1, 0],
-      [1, 1],
-    ];
-
-    for (let r = 0; r < ROWS; r++) {
-      for (let c = 0; c < COLS; c++) {
-        if (board[r][c].isMine) continue;
-
-        let minesCount = 0;
-
-        for (const [dRow, dCol] of directions) {
-          const newRow = r + dRow;
-          const newCol = c + dCol;
-
-          if (newRow >= 0 && newRow < ROWS && newCol >= 0 && newCol < COLS) {
-            if (board[newRow][newCol].isMine) {
-              minesCount++;
-            }
-          }
-        }
-
-        board[r][c].adjacentMines = minesCount;
-      }
-    }
+    const newBoard = board.map((row) => row.map((cell) => ({ ...cell })));
+    newBoard[r][c].isFlagged = !isCurrentlyFlagged;
+    setBoard(newBoard);
   };
 
   const handleCellClick = (r: number, c: number) => {
-    if (
-      gameOver ||
-      gameWon ||
-      board[r][c].isRevealed ||
-      board[r][c].isFlagged
-    ) {
+    if (gameOver || gameWon || board[r][c].isRevealed) return;
+
+    if (isFlagMode) {
+      toggleFlag(r, c);
       return;
     }
+
+    if (board[r][c].isFlagged) return;
 
     const newBoard = board.map((row) => row.map((cell) => ({ ...cell })));
 
@@ -178,16 +203,7 @@ export function MinesweeperApp() {
 
   const handleRightClick = (e: React.MouseEvent, r: number, c: number) => {
     e.preventDefault();
-
-    if (gameOver || gameWon || board[r][c].isRevealed) {
-      return;
-    }
-
-    const newBoard = board.map((row) => row.map((cell) => ({ ...cell })));
-
-    newBoard[r][c].isFlagged = !newBoard[r][c].isFlagged;
-
-    setBoard(newBoard);
+    toggleFlag(r, c);
   };
 
   const renderCellContent = (cell: CellData) => {
@@ -241,7 +257,7 @@ export function MinesweeperApp() {
 
     if (!isFirstClick && !gameOver && !gameWon) {
       interval = window.setInterval(() => {
-        setTime((prevTime) => Math.min(prevTime + 1, 999)); // Максимум 999 секунд
+        setTime((prevTime) => Math.min(prevTime + 1, 999));
       }, 1000);
     }
 
@@ -254,10 +270,27 @@ export function MinesweeperApp() {
     <div className="minesweeper-wrapper">
       <div className="ms-window">
         <div className="ms-title-bar">
-          <span className="ms-title-text">💣 Сапер</span>
+          <span className="ms-title-text">{t.msTitle}</span>
         </div>
 
         <div className="ms-content">
+          <div className="ms-mode-toggle">
+            <button
+              type="button"
+              className={`ms-mode-btn ${!isFlagMode ? "active" : ""}`}
+              onClick={() => setIsFlagMode(false)}
+            >
+              {t.msDig}
+            </button>
+            <button
+              type="button"
+              className={`ms-mode-btn ${isFlagMode ? "active" : ""}`}
+              onClick={() => setIsFlagMode(true)}
+            >
+              {t.msFlag}
+            </button>
+          </div>
+
           <div className="ms-scoreboard">
             <div className="ms-digital-display">{formatNumber(minesLeft)}</div>
             <button className="ms-smiley-btn" onClick={resetGame}>
@@ -265,6 +298,7 @@ export function MinesweeperApp() {
             </button>
             <div className="ms-digital-display">{formatNumber(time)}</div>
           </div>
+
           <div className="ms-board">
             {board.map((row, rowIndex) => (
               <div key={rowIndex} className="ms-row">
