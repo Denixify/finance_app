@@ -11,6 +11,7 @@ import {
   Cell,
   Legend,
 } from "recharts";
+import { useLang } from "./LanguageContext";
 
 export interface LineChartItem {
   date: string;
@@ -18,7 +19,6 @@ export interface LineChartItem {
   expense: number;
   balance: number;
 }
-
 export interface PieChartItem {
   name: string;
   value: number;
@@ -42,16 +42,17 @@ export function ChartsSection({
   lineChartData,
   pieChartData,
 }: ChartsSectionProps) {
+  const { t } = useLang();
   const hasData = lineChartData.length > 0 || pieChartData.length > 0;
 
   return (
     <section className="charts-section">
       <div className="chart-container line-chart-box">
-        <h3>Динаміка фінансів</h3>
+        <h3>{t.chartDynamics}</h3>
         {!hasData ? (
           <div className="chart-empty-state">
             <span className="empty-chart-icon">📈</span>
-            <p>Недостатньо даних для побудови графіка</p>
+            <p>{t.chartEmptyLine}</p>
           </div>
         ) : (
           <ResponsiveContainer width="100%" height={220}>
@@ -78,11 +79,11 @@ export function ChartsSection({
                 }}
                 labelStyle={{ display: "none" }}
               />
-                <Legend />
-                <Line
+              <Legend />
+              <Line
                 type="monotone"
                 dataKey="balance"
-                name="Баланс"
+                name={t.statBalance}
                 stroke="#3498db"
                 strokeWidth={3}
                 activeDot={{ r: 8 }}
@@ -90,7 +91,7 @@ export function ChartsSection({
               <Line
                 type="monotone"
                 dataKey="income"
-                name="Дохід"
+                name={t.statIncome}
                 stroke="#2ecc71"
                 strokeWidth={3}
                 activeDot={{ r: 8 }}
@@ -98,7 +99,7 @@ export function ChartsSection({
               <Line
                 type="monotone"
                 dataKey="expense"
-                name="Витрати"
+                name={t.statExpense}
                 stroke="#e74c3c"
                 strokeWidth={3}
                 activeDot={{ r: 8 }}
@@ -109,11 +110,11 @@ export function ChartsSection({
       </div>
 
       <div className="chart-container pie-chart-box">
-        <h3>Структура витрат</h3>
+        <h3>{t.chartStruct}</h3>
         {pieChartData.length === 0 ? (
           <div className="chart-empty-state">
             <span className="empty-chart-icon">🥧</span>
-            <p>Немає витрат для аналізу</p>
+            <p>{t.chartEmptyPie}</p>
           </div>
         ) : (
           <ResponsiveContainer width="100%" height={220}>

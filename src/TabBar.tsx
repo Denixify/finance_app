@@ -1,3 +1,4 @@
+import { useLang } from "./LanguageContext";
 export type AppTab = "overview" | "calendar" | "analytics" | "history";
 
 interface TabBarProps {
@@ -7,6 +8,8 @@ interface TabBarProps {
 }
 
 export function TabBar({ activeTab, onChangeTab, onAddClick }: TabBarProps) {
+  const { t } = useLang();
+
   return (
     <nav className="tab-bar">
       <button
@@ -15,7 +18,7 @@ export function TabBar({ activeTab, onChangeTab, onAddClick }: TabBarProps) {
         onClick={() => onChangeTab("overview")}
       >
         <span className="tab-icon">🏠</span>
-        <span>Огляд</span>
+        <span>{t.tabOverview}</span>
       </button>
 
       <button
@@ -24,16 +27,11 @@ export function TabBar({ activeTab, onChangeTab, onAddClick }: TabBarProps) {
         onClick={() => onChangeTab("calendar")}
       >
         <span className="tab-icon">📅</span>
-        <span>Календар</span>
+        <span>{t.tabCalendar}</span>
       </button>
 
       <div className="tab-center-slot">
-        <button
-          type="button"
-          className="tab-add-button"
-          onClick={onAddClick}
-          aria-label="Додати запис"
-        >
+        <button type="button" className="tab-add-button" onClick={onAddClick}>
           +
         </button>
       </div>
@@ -44,7 +42,7 @@ export function TabBar({ activeTab, onChangeTab, onAddClick }: TabBarProps) {
         onClick={() => onChangeTab("analytics")}
       >
         <span className="tab-icon">📊</span>
-        <span>Аналіз</span>
+        <span>{t.tabAnalytics}</span>
       </button>
 
       <button
@@ -53,7 +51,7 @@ export function TabBar({ activeTab, onChangeTab, onAddClick }: TabBarProps) {
         onClick={() => onChangeTab("history")}
       >
         <span className="tab-icon">🧾</span>
-        <span>Історія</span>
+        <span>{t.tabHistory}</span>
       </button>
     </nav>
   );

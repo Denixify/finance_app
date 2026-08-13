@@ -2,7 +2,8 @@ import { useMemo, useState } from "react";
 import type { Transaction } from "./types";
 import { ChartsSection } from "./ChartsSection";
 import type { LineChartItem, PieChartItem } from "./ChartsSection";
-import { MONTH_NAMES, monthKey } from "./dateUtils";
+import { monthKey } from "./dateUtils";
+import { useLang } from "./LanguageContext";
 
 interface AnalyticsTabProps {
   transactions: Transaction[];
@@ -35,19 +36,20 @@ function DeltaBadge({
   delta: number | null;
   positiveIsGood: boolean;
 }) {
-  if (delta === null) {
-    return <span className="delta-badge neutral">новий</span>;
-  }
+  const { t } = useLang();
+  if (delta === null)
+    return <span className="delta-badge neutral">{t.newTag}</span>;
   const isGood = positiveIsGood ? delta >= 0 : delta <= 0;
   const arrow = delta > 0 ? "▲" : delta < 0 ? "▼" : "•";
   return (
     <span className={`delta-badge ${isGood ? "good" : "bad"}`}>
-      {arrow} {Math.abs(delta)}% до мин. міс.
+      {arrow} {Math.abs(delta)}% {t.vsPrevMonth}
     </span>
   );
 }
 
 export function AnalyticsTab({ transactions }: AnalyticsTabProps) {
+  const { t } = useLang();
   const [viewDate, setViewDate] = useState(() => new Date());
   const year = viewDate.getFullYear();
   const month = viewDate.getMonth();
@@ -60,11 +62,11 @@ export function AnalyticsTab({ transactions }: AnalyticsTabProps) {
   const goNextMonth = () => setViewDate(new Date(year, month + 1, 1));
 
   const monthTransactions = useMemo(
-    () => transactions.filter((t) => t.date.startsWith(currentKey)),
+    () => transactions.filter((tx) => tx.date.startsWith(currentKey)),
     [transactions, currentKey],
   );
   const prevMonthTransactions = useMemo(
-    () => transactions.filter((t) => t.date.startsWith(prevKey)),
+    () => transactions.filter((tx) => tx.date.startsWith(prevKey)),
     [transactions, prevKey],
   );
 
@@ -82,17 +84,17 @@ export function AnalyticsTab({ transactions }: AnalyticsTabProps) {
   );
 
   const lineChartData = useMemo(() => {
-    const priorTransactions = transactions.filter((t) => t.date < currentKey);
-
+    const priorTransactions = transactions.filter((tx) => tx.date < currentKey);
     const startingBalance = priorTransactions.reduce(
-      (sum, t) => sum + (t.type === "income" ? t.amount : -t.amount),
+      (sum, tx) => sum + (tx.type === "income" ? tx.amount : -tx.amount),
       0,
     );
 
     const grouped = monthTransactions.reduce(
-      (acc, t) => {
-        if (!acc[t.date]) acc[t.date] = { date: t.date, income: 0, expense: 0 };
-        acc[t.date][t.type] += t.amount;
+      (acc, tx) => {
+        if (!acc[tx.date])
+          acc[tx.date] = { date: tx.date, income: 0, expense: 0 };
+        acc[tx.date][tx.type] += tx.amount;
         return acc;
       },
       {} as Record<string, { date: string; income: number; expense: number }>,
@@ -105,32 +107,27 @@ export function AnalyticsTab({ transactions }: AnalyticsTabProps) {
     return sorted.reduce((acc: LineChartItem[], day) => {
       const prevBalance =
         acc.length > 0 ? acc[acc.length - 1].balance : startingBalance;
-
-      acc.push({
-        ...day,
-        balance: prevBalance + day.income - day.expense,
-      });
-
+      acc.push({ ...day, balance: prevBalance + day.income - day.expense });
       return acc;
     }, []);
   }, [monthTransactions, transactions, currentKey]);
 
   const categoryBreakdown = useMemo(() => {
-    const expenses = monthTransactions.filter((t) => t.type === "expense");
+    const expenses = monthTransactions.filter((tx) => tx.type === "expense");
     const grouped = expenses.reduce(
-      (acc, t) => {
-        const cleanCategory = t.category.trim();
+      (acc, tx) => {
+        const cleanCategory = tx.category.trim();
         const normalizedCat =
           cleanCategory.charAt(0).toUpperCase() +
           cleanCategory.slice(1).toLowerCase();
-
         if (!acc[normalizedCat])
           acc[normalizedCat] = { name: normalizedCat, value: 0 };
-        acc[normalizedCat].value += t.amount;
+        acc[normalizedCat].value += tx.amount;
         return acc;
       },
       {} as Record<string, PieChartItem>,
     );
+
     const list = Object.values(grouped).sort((a, b) => b.value - a.value);
     const total = list.reduce((acc, c) => acc + c.value, 0);
     return list.map((c) => ({
@@ -140,10 +137,7 @@ export function AnalyticsTab({ transactions }: AnalyticsTabProps) {
   }, [monthTransactions]);
 
   const pieChartData: PieChartItem[] = categoryBreakdown.map(
-    ({ name, value }) => ({
-      name,
-      value,
-    }),
+    ({ name, value }) => ({ name, value }),
   );
 
   const now = new Date();
@@ -152,26 +146,16 @@ export function AnalyticsTab({ transactions }: AnalyticsTabProps) {
   return (
     <div className="analytics-tab">
       <div className="month-switcher">
-        <button
-          type="button"
-          className="cal-nav"
-          onClick={goPrevMonth}
-          aria-label="Попередній місяць"
-        >
+        <button type="button" className="cal-nav" onClick={goPrevMonth}>
           ‹
         </button>
         <h3>
-          {MONTH_NAMES[month]} {year}
+          {t.months[month]} {year}
           {isCurrentMonth && (
-            <span className="current-month-badge">поточний</span>
+            <span className="current-month-badge">{t.currentMonth}</span>
           )}
         </h3>
-        <button
-          type="button"
-          className="cal-nav"
-          onClick={goNextMonth}
-          aria-label="Наступний місяць"
-        >
+        <button type="button" className="cal-nav" onClick={goNextMonth}>
           ›
         </button>
       </div>
@@ -180,24 +164,24 @@ export function AnalyticsTab({ transactions }: AnalyticsTabProps) {
         <div className="chart-empty-state">
           <span className="empty-chart-icon">🗓️</span>
           <p>
-            Немає записів за {MONTH_NAMES[month].toLowerCase()} {year}
+            {t.emptyAnalytics} {t.months[month].toLowerCase()} {year}
           </p>
         </div>
       ) : (
         <>
           <div className="month-stats">
             <div className="month-stat income">
-              <span className="stat-label">Дохід</span>
+              <span className="stat-label">{t.statIncome}</span>
               <span className="stat-value">€{income.toFixed(2)}</span>
               <DeltaBadge delta={incomeDelta} positiveIsGood />
             </div>
             <div className="month-stat expense">
-              <span className="stat-label">Витрати</span>
+              <span className="stat-label">{t.statExpense}</span>
               <span className="stat-value">€{expense.toFixed(2)}</span>
               <DeltaBadge delta={expenseDelta} positiveIsGood={false} />
             </div>
             <div className="month-stat balance">
-              <span className="stat-label">Баланс</span>
+              <span className="stat-label">{t.statBalance}</span>
               <span
                 className={`stat-value ${balance >= 0 ? "positive" : "negative"}`}
               >
@@ -208,7 +192,7 @@ export function AnalyticsTab({ transactions }: AnalyticsTabProps) {
 
           {categoryBreakdown.length > 0 && (
             <div className="category-breakdown">
-              <h3>Витрати за категоріями</h3>
+              <h3>{t.breakdownTitle}</h3>
               <div className="category-bars">
                 {categoryBreakdown.map((c, i) => (
                   <div className="category-bar-row" key={c.name}>
@@ -233,7 +217,6 @@ export function AnalyticsTab({ transactions }: AnalyticsTabProps) {
               </div>
             </div>
           )}
-
           <ChartsSection
             lineChartData={lineChartData}
             pieChartData={pieChartData}

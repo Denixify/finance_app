@@ -1,5 +1,6 @@
 import type { Transaction } from "./types";
 import { TransactionItem } from "./TransactionItem";
+import { useLang } from "./LanguageContext";
 
 interface TransactionListProps {
   transactions: Transaction[];
@@ -24,37 +25,39 @@ export function TransactionList({
   selectedDate,
   onClearDate,
 }: TransactionListProps) {
-  const filteredTransactions = transactions.filter((t) => {
-    const matchesType = filter === "all" || t.type === filter;
-    const matchesDate = !selectedDate || t.date === selectedDate;
+  const { t } = useLang();
+
+  const filteredTransactions = transactions.filter((tx) => {
+    const matchesType = filter === "all" || tx.type === filter;
+    const matchesDate = !selectedDate || tx.date === selectedDate;
     return matchesType && matchesDate;
   });
 
   return (
     <section className="transactions-list-panel">
       <div className="list-header">
-        <h2>Історія операцій</h2>
+        <h2>{t.historyTitle}</h2>
         <div className="filters">
           <button
             onClick={() => setFilter("all")}
             className={filter === "all" ? "active" : ""}
             type="button"
           >
-            Всі
+            {t.filterAll}
           </button>
           <button
             onClick={() => setFilter("income")}
             className={filter === "income" ? "active" : ""}
             type="button"
           >
-            Доходи
+            {t.filterIncome}
           </button>
           <button
             onClick={() => setFilter("expense")}
             className={filter === "expense" ? "active" : ""}
             type="button"
           >
-            Витрати
+            {t.filterExpense}
           </button>
         </div>
       </div>
@@ -63,7 +66,7 @@ export function TransactionList({
         <div className="date-filter-banner">
           <span>📅 {selectedDate}</span>
           <button onClick={onClearDate} type="button">
-            Скинути
+            {t.resetDate}
           </button>
         </div>
       )}
@@ -72,22 +75,18 @@ export function TransactionList({
         {filteredTransactions.length === 0 ? (
           <div className="empty-state">
             <div className="empty-icon">📁</div>
-            <h3>Немає записів</h3>
-            <p>
-              {selectedDate
-                ? "На цю дату записів немає. Натисніть «+» знизу, щоб додати — дата вже підставлена."
-                : "Ваша фінансова історія поки що порожня, або вибраний фільтр не дав результатів."}
-            </p>
+            <h3>{t.noRecords}</h3>
+            <p>{selectedDate ? t.emptyHistoryDate : t.emptyHistory}</p>
           </div>
         ) : (
-          filteredTransactions.map((t) => (
+          filteredTransactions.map((tx) => (
             <TransactionItem
-              key={t.id}
-              transaction={t}
+              key={tx.id}
+              transaction={tx}
               onEdit={onEdit}
               onDelete={onDelete}
-              isDeleting={deletingIds.includes(t.id)}
-              isEditing={editingId === t.id}
+              isDeleting={deletingIds.includes(tx.id)}
+              isEditing={editingId === tx.id}
             />
           ))
         )}

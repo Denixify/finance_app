@@ -1,14 +1,12 @@
 import { useMemo, useState } from "react";
 import type { Transaction } from "./types";
-import { MONTH_NAMES } from "./dateUtils";
+import { useLang } from "./LanguageContext";
 
 interface CalendarProps {
   transactions: Transaction[];
   selectedDate: string | null;
   onSelectDate: (date: string | null) => void;
 }
-
-const WEEKDAYS = ["Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Нд"];
 
 function toDateKey(year: number, month: number, day: number): string {
   return `${year}-${String(month + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
@@ -19,6 +17,7 @@ export function Calendar({
   selectedDate,
   onSelectDate,
 }: CalendarProps) {
+  const { t } = useLang();
   const [viewDate, setViewDate] = useState<Date>(() =>
     selectedDate ? new Date(selectedDate) : new Date(),
   );
@@ -28,10 +27,10 @@ export function Calendar({
 
   const dayInfo = useMemo(() => {
     const map = new Map<string, { income: number; expense: number }>();
-    transactions.forEach((t) => {
-      const entry = map.get(t.date) || { income: 0, expense: 0 };
-      entry[t.type] += t.amount;
-      map.set(t.date, entry);
+    transactions.forEach((tx) => {
+      const entry = map.get(tx.date) || { income: 0, expense: 0 };
+      entry[tx.type] += tx.amount;
+      map.set(tx.date, entry);
     });
     return map;
   }, [transactions]);
@@ -63,7 +62,7 @@ export function Calendar({
           ‹
         </button>
         <h3>
-          {MONTH_NAMES[month]} {year}
+          {t.months[month]} {year}
         </h3>
         <button className="cal-nav" onClick={goNextMonth} type="button">
           ›
@@ -71,7 +70,7 @@ export function Calendar({
       </div>
 
       <div className="calendar-weekdays">
-        {WEEKDAYS.map((w) => (
+        {t.weekdays.map((w) => (
           <span key={w}>{w}</span>
         ))}
       </div>
@@ -112,11 +111,11 @@ export function Calendar({
             className="cal-clear"
             onClick={() => onSelectDate(null)}
           >
-            Скинути дату ({selectedDate})
+            {t.calReset} ({selectedDate})
           </button>
         ) : (
           <button type="button" className="cal-clear" onClick={goToday}>
-            Сьогодні
+            {t.calToday}
           </button>
         )}
       </div>

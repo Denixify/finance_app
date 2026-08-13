@@ -12,6 +12,7 @@ import { TabBar } from "./TabBar";
 import type { AppTab } from "./TabBar";
 import { BottomSheet } from "./BottomSheet";
 import { AnalyticsTab } from "./AnalyticsTab";
+import { useLang } from "./LanguageContext";
 
 const STORAGE_KEY = "finance-app:transactions";
 
@@ -28,21 +29,19 @@ function loadStoredTransactions(): Transaction[] {
 }
 
 export function FinanceApp() {
+  const { t, toggleLang } = useLang();
+
   const [transactions, setTransactions] = useState<Transaction[]>(
     loadStoredTransactions,
   );
   const [filter, setFilter] = useState<"all" | "income" | "expense">("all");
   const [deletingIds, setDeletingIds] = useState<string[]>([]);
-
   const [activeTab, setActiveTab] = useState<AppTab>("overview");
-
   const [editingTransaction, setEditingTransaction] =
     useState<Transaction | null>(null);
-
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
-
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
 
   useEffect(() => {
@@ -77,12 +76,7 @@ export function FinanceApp() {
 
     return sorted.reduce((acc: LineChartItem[], day) => {
       const prevBalance = acc.length > 0 ? acc[acc.length - 1].balance : 0;
-
-      acc.push({
-        ...day,
-        balance: prevBalance + day.income - day.expense,
-      });
-
+      acc.push({ ...day, balance: prevBalance + day.income - day.expense });
       return acc;
     }, []);
   }, [transactions]);
@@ -95,7 +89,6 @@ export function FinanceApp() {
         const normalizedCat =
           cleanCategory.charAt(0).toUpperCase() +
           cleanCategory.slice(1).toLowerCase();
-
         if (!acc[normalizedCat])
           acc[normalizedCat] = { name: normalizedCat, value: 0 };
         acc[normalizedCat].value += t.amount;
@@ -194,26 +187,20 @@ export function FinanceApp() {
         if (!Array.isArray(parsed) || !parsed.every(isTransactionShape)) {
           throw new Error("invalid shape");
         }
-        const confirmed = window.confirm(
-          `Імпортувати ${parsed.length} записів? Це замінить поточні дані.`,
-        );
+        const confirmed = window.confirm(t.alertImport);
         if (confirmed) {
           setTransactions(parsed);
           setIsSettingsOpen(false);
         }
       } catch {
-        window.alert(
-          "Не вдалося прочитати файл — перевірте, що це коректний backup.",
-        );
+        window.alert(t.alertImportError);
       }
     };
     reader.readAsText(file);
   };
 
   const handleClearAll = () => {
-    const confirmed = window.confirm(
-      "Видалити всі записи безповоротно? Рекомендуємо спершу зробити експорт.",
-    );
+    const confirmed = window.confirm(t.alertClear);
     if (confirmed) {
       setTransactions([]);
       setIsSettingsOpen(false);
@@ -223,15 +210,25 @@ export function FinanceApp() {
   return (
     <div className="finance-dashboard">
       <header className="app-topbar">
-        <h1>📊 Фінанси</h1>
-        <button
-          type="button"
-          className="settings-btn"
-          onClick={() => setIsSettingsOpen(true)}
-          aria-label="Налаштування"
-        >
-          ⚙️
-        </button>
+        <h1>{t.title}</h1>
+        <div className="topbar-actions">
+          <button
+            type="button"
+            className="lang-toggle-btn"
+            onClick={toggleLang}
+            aria-label="Змінити мову / Сменить язык"
+          >
+            {t.langToggle}
+          </button>
+          <button
+            type="button"
+            className="settings-btn"
+            onClick={() => setIsSettingsOpen(true)}
+            aria-label={t.settingsTitle}
+          >
+            ⚙️
+          </button>
+        </div>
       </header>
 
       <main className="app-content">
@@ -256,7 +253,6 @@ export function FinanceApp() {
               selectedDate={selectedDate}
               onSelectDate={setSelectedDate}
             />
-
             <div className="calendar-day-detail">
               {selectedDate ? (
                 <>
@@ -267,11 +263,11 @@ export function FinanceApp() {
                       className="btn-add-mini"
                       onClick={openAddForm}
                     >
-                      + Додати
+                      + {t.btnAdd}
                     </button>
                   </div>
                   {dayTransactions.length === 0 ? (
-                    <p className="day-empty">Немає записів на цю дату</p>
+                    <p className="day-empty">{t.dayEmpty}</p>
                   ) : (
                     <div className="transactions-list">
                       {dayTransactions.map((t) => (
@@ -288,9 +284,7 @@ export function FinanceApp() {
                   )}
                 </>
               ) : (
-                <p className="day-empty">
-                  Оберіть дату в календарі, щоб переглянути або додати запис
-                </p>
+                <p className="day-empty">{t.daySelectPrompt}</p>
               )}
             </div>
           </div>
@@ -324,7 +318,7 @@ export function FinanceApp() {
       <BottomSheet
         isOpen={isFormOpen}
         onClose={closeForm}
-        title={editingTransaction ? "✏️ Редагування" : "Новий запис"}
+        title={editingTransaction ? "✏️" : "+"}
       >
         <TransactionForm
           onAdd={handleAddTransaction}
@@ -339,25 +333,19 @@ export function FinanceApp() {
       <BottomSheet
         isOpen={isSettingsOpen}
         onClose={() => setIsSettingsOpen(false)}
-        title="⚙️ Налаштування"
+        title={t.settingsTitle}
       >
         <div className="settings-sheet">
-          <p className="settings-hint">
-            Дані зберігаються локально в цьому браузері (localStorage). Якщо
-            очистити кеш браузера або перейти з іншого пристрою — записів там не
-            буде. Регулярно робіть резервну копію.
-          </p>
-
+          <p className="settings-hint">{t.settingsHint}</p>
           <button type="button" className="btn-export" onClick={handleExport}>
-            ⬇️ Експортувати дані (JSON)
+            {t.btnExport}
           </button>
-
           <button
             type="button"
             className="btn-import"
             onClick={handleImportClick}
           >
-            ⬆️ Імпортувати з файлу
+            {t.btnImport}
           </button>
           <input
             ref={fileInputRef}
@@ -366,12 +354,12 @@ export function FinanceApp() {
             onChange={handleImportFile}
             style={{ display: "none" }}
           />
-
           <button type="button" className="btn-danger" onClick={handleClearAll}>
-            🗑️ Очистити всі дані
+            {t.btnClear}
           </button>
-
-          <p className="settings-meta">Записів у базі: {transactions.length}</p>
+          <p className="settings-meta">
+            {t.settingsMeta} {transactions.length}
+          </p>
         </div>
       </BottomSheet>
     </div>

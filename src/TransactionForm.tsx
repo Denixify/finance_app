@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from "react";
 import type { Transaction, TransactionType } from "./types";
+import { useLang } from "./LanguageContext";
 
 interface TransactionFormProps {
   onAdd: (transaction: Omit<Transaction, "id">) => void;
@@ -10,22 +11,6 @@ interface TransactionFormProps {
   onUpdated?: () => void;
 }
 
-const EXPENSE_CATEGORIES = [
-  "Продукти",
-  "Телефонія",
-  "Побут",
-  "Розваги",
-  "Здоров'я",
-  "Кафе та ресторани",
-  "Одяг",
-  "Інше",
-];
-
-const INCOME_CATEGORIES = [
-  "Зарплата",
-  "Подарунок",
-];
-
 export function TransactionForm({
   onAdd,
   onUpdate,
@@ -34,9 +19,11 @@ export function TransactionForm({
   defaultDate,
   onUpdated,
 }: TransactionFormProps) {
+  const { t } = useLang();
+
   const [formData, setFormData] = useState({
     amount: "",
-    category: EXPENSE_CATEGORIES[0],
+    category: t.catExpense[0],
     type: "expense" as TransactionType,
     date: defaultDate || new Date().toISOString().split("T")[0],
     description: "",
@@ -55,13 +42,13 @@ export function TransactionForm({
     } else {
       setFormData({
         amount: "",
-        category: EXPENSE_CATEGORIES[0],
+        category: t.catExpense[0],
         type: "expense",
         date: defaultDate || new Date().toISOString().split("T")[0],
         description: "",
       });
     }
-  }, [editingTransaction, defaultDate]);
+  }, [editingTransaction, defaultDate, t.catExpense]);
 
   const handleInputChange = (
     e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>,
@@ -70,7 +57,7 @@ export function TransactionForm({
 
     if (name === "type") {
       const newCategory =
-        value === "expense" ? EXPENSE_CATEGORIES[0] : INCOME_CATEGORIES[0];
+        value === "expense" ? t.catExpense[0] : t.catIncome[0];
       setFormData({
         ...formData,
         type: value as TransactionType,
@@ -110,10 +97,7 @@ export function TransactionForm({
     setFormData({
       ...formData,
       amount: "",
-      category:
-        formData.type === "expense"
-          ? EXPENSE_CATEGORIES[0]
-          : INCOME_CATEGORIES[0],
+      category: formData.type === "expense" ? t.catExpense[0] : t.catIncome[0],
       description: "",
     });
 
@@ -121,25 +105,25 @@ export function TransactionForm({
   };
 
   const currentCategories =
-    formData.type === "expense" ? EXPENSE_CATEGORIES : INCOME_CATEGORIES;
+    formData.type === "expense" ? t.catExpense : t.catIncome;
 
   return (
     <form onSubmit={handleSubmit} className="transaction-form" noValidate>
       <div className="form-group">
-        <label className="form-label">Тип</label>
+        <label className="form-label">{t.formType}</label>
         <select
           className="form-select"
           name="type"
           value={formData.type}
           onChange={handleInputChange}
         >
-          <option value="expense">Витрата</option>
-          <option value="income">Дохід</option>
+          <option value="expense">{t.typeExpense}</option>
+          <option value="income">{t.typeIncome}</option>
         </select>
       </div>
 
       <div className="form-group">
-        <label className="form-label">Дата</label>
+        <label className="form-label">{t.formDate}</label>
         <input
           className="form-input"
           type="date"
@@ -151,7 +135,7 @@ export function TransactionForm({
       </div>
 
       <div className="form-group">
-        <label className="form-label">Сума</label>
+        <label className="form-label">{t.formAmount}</label>
         <input
           className="form-input"
           type="number"
@@ -166,7 +150,7 @@ export function TransactionForm({
       </div>
 
       <div className="form-group">
-        <label className="form-label">Категорія</label>
+        <label className="form-label">{t.formCategory}</label>
         <select
           className="form-select"
           name="category"
@@ -179,18 +163,22 @@ export function TransactionForm({
               {cat}
             </option>
           ))}
+          {!currentCategories.includes(formData.category) &&
+            formData.category && (
+              <option value={formData.category}>{formData.category}</option>
+            )}
         </select>
       </div>
 
       <div className="form-group">
-        <label className="form-label">Опис</label>
+        <label className="form-label">{t.formDesc}</label>
         <input
           className="form-input"
           type="text"
           name="description"
           value={formData.description}
           onChange={handleInputChange}
-          placeholder="Опціонально"
+          placeholder={t.descPlaceholder}
           enterKeyHint="done"
         />
       </div>
@@ -200,11 +188,11 @@ export function TransactionForm({
           type="submit"
           className={editingTransaction ? "btn-save" : "btn-add"}
         >
-          {editingTransaction ? "Зберегти" : "Додати"}
+          {editingTransaction ? t.btnSave : t.btnAdd}
         </button>
         {editingTransaction && (
           <button type="button" className="btn-cancel" onClick={onCancelEdit}>
-            Скасувати
+            {t.btnCancel}
           </button>
         )}
       </div>
