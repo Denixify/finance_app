@@ -14,6 +14,19 @@ import { BottomSheet } from "./components/BottomSheet";
 import { AnalyticsTab } from "./components/AnalyticsTab";
 import { useLang } from "./components/LanguageContext";
 import { MinesweeperApp } from "./EasterEgg/MinesweeperApp";
+import { LoginScreen } from "./components/LoginScreen";
+
+import { auth, db } from "./firebaseConfig";
+import { onAuthStateChanged, signOut, type User } from "firebase/auth";
+import {
+  collection,
+  doc,
+  setDoc,
+  deleteDoc,
+  getDocs,
+  writeBatch,
+} from "firebase/firestore";
+import { encryptData, decryptData } from "./cryptoUtils";
 
 const STORAGE_KEY = "finance-app:transactions";
 
@@ -32,6 +45,13 @@ function loadStoredTransactions(): Transaction[] {
 export function FinanceApp() {
   const { t, toggleLang } = useLang();
 
+  const [user, setUser] = useState<User | null>(null);
+  const [nickname, setNickname] = useState<string | null>(
+    localStorage.getItem("finance-app:nickname"),
+  );
+  const [isAuthChecking, setIsAuthChecking] = useState(true);
+  const [isSyncing, setIsSyncing] = useState(false);
+
   const [transactions, setTransactions] = useState<Transaction[]>(
     loadStoredTransactions,
   );
@@ -48,12 +68,85 @@ export function FinanceApp() {
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
 
   useEffect(() => {
-    try {
-      window.localStorage.setItem(STORAGE_KEY, JSON.stringify(transactions));
-    } catch {
-      //
-    }
-  }, [transactions]);
+    const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
+      setUser(currentUser);
+      if (currentUser) {
+        if (
+          !localStorage.getItem("finance-app:nickname") &&
+          currentUser.email
+        ) {
+          const extracted = currentUser.email.split("@")[0];
+          const capitalized =
+            extracted.charAt(0).toUpperCase() + extracted.slice(1);
+          setNickname(capitalized);
+          localStorage.setItem("finance-app:nickname", capitalized);
+        }
+
+        setIsSyncing(true);
+        try {
+          const notesRef = collection(db, "users", currentUser.uid, "notes");
+          const snapshot = await getDocs(notesRef);
+
+          if (!snapshot.empty) {
+            const firebaseTransactions: Transaction[] = [];
+            snapshot.forEach((docSnap) => {
+              const data = docSnap.data();
+              if (data.encryptedPayload) {
+                const decrypted = decryptData(data.encryptedPayload);
+                if (decrypted) {
+                  firebaseTransactions.push({
+                    id: docSnap.id,
+                    ...decrypted,
+                  } as Transaction);
+                }
+              } else {
+                firebaseTransactions.push({
+                  id: docSnap.id,
+                  ...data,
+                } as Transaction);
+              }
+            });
+
+            firebaseTransactions.sort(
+              (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime(),
+            );
+            setTransactions(firebaseTransactions);
+            localStorage.setItem(
+              STORAGE_KEY,
+              JSON.stringify(firebaseTransactions),
+            );
+          } else {
+            const localData = loadStoredTransactions();
+            if (localData.length > 0) {
+              const batch = writeBatch(db);
+              localData.forEach((tx) => {
+                const docRef = doc(
+                  db,
+                  "users",
+                  currentUser.uid,
+                  "notes",
+                  tx.id,
+                );
+                batch.set(docRef, { encryptedPayload: encryptData(tx) });
+              });
+              await batch.commit();
+              setTransactions(localData);
+            }
+          }
+        } catch (error) {
+          console.error("Fetch error:", error);
+        } finally {
+          setIsSyncing(false);
+        }
+      } else {
+        setTransactions([]);
+        localStorage.removeItem(STORAGE_KEY);
+      }
+      setIsAuthChecking(false);
+    });
+
+    return () => unsubscribe();
+  }, []);
 
   useEffect(() => {
     if (isMinesweeperOpen) {
@@ -72,17 +165,6 @@ export function FinanceApp() {
         window.scrollTo(0, parseInt(scrollY || "0") * -1);
       }
     }
-
-    return () => {
-      const scrollY = document.body.style.top;
-      if (scrollY) {
-        document.body.style.position = "";
-        document.body.style.top = "";
-        document.body.style.width = "";
-        document.body.style.overflow = "";
-        window.scrollTo(0, parseInt(scrollY || "0") * -1);
-      }
-    };
   }, [isMinesweeperOpen]);
 
   const totalIncome = transactions
@@ -103,11 +185,9 @@ export function FinanceApp() {
       },
       {} as Record<string, { date: string; income: number; expense: number }>,
     );
-
     const sorted = Object.values(grouped).sort((a, b) =>
       a.date.localeCompare(b.date),
     );
-
     return sorted.reduce((acc: LineChartItem[], day) => {
       const prevBalance = acc.length > 0 ? acc[acc.length - 1].balance : 0;
       acc.push({ ...day, balance: prevBalance + day.income - day.expense });
@@ -142,18 +222,17 @@ export function FinanceApp() {
     setEditingTransaction(null);
     setIsFormOpen(true);
   };
-
   const openEditForm = (t: Transaction) => {
     setEditingTransaction(t);
     setIsFormOpen(true);
   };
-
   const closeForm = () => {
     setIsFormOpen(false);
     setEditingTransaction(null);
   };
 
-  const handleAddTransaction = (newTxData: Omit<Transaction, "id">) => {
+  const handleAddTransaction = async (newTxData: Omit<Transaction, "id">) => {
+    if (!user) return;
     const newTransaction: Transaction = {
       id:
         typeof crypto.randomUUID === "function"
@@ -161,22 +240,63 @@ export function FinanceApp() {
           : Date.now().toString(),
       ...newTxData,
     };
-    setTransactions([newTransaction, ...transactions]);
+
+    const updatedList = [newTransaction, ...transactions];
+    setTransactions(updatedList);
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(updatedList));
+
+    try {
+      const payload = encryptData(newTransaction);
+      await setDoc(doc(db, "users", user.uid, "notes", newTransaction.id), {
+        encryptedPayload: payload,
+      });
+    } catch (e) {
+      console.error(e);
+    }
   };
 
-  const handleUpdateTransaction = (updatedTx: Transaction) => {
-    setTransactions(
-      transactions.map((t) => (t.id === updatedTx.id ? updatedTx : t)),
+  const handleUpdateTransaction = async (updatedTx: Transaction) => {
+    if (!user) return;
+    const updatedList = transactions.map((t) =>
+      t.id === updatedTx.id ? updatedTx : t,
     );
+    setTransactions(updatedList);
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(updatedList));
+
+    try {
+      const payload = encryptData(updatedTx);
+      await setDoc(doc(db, "users", user.uid, "notes", updatedTx.id), {
+        encryptedPayload: payload,
+      });
+    } catch (e) {
+      console.error(e);
+    }
   };
 
-  const handleDelete = (id: string) => {
+  const handleDelete = async (id: string) => {
+    if (!user) return;
     setDeletingIds((prev) => [...prev, id]);
-    setTimeout(() => {
-      setTransactions((prev) => prev.filter((t) => t.id !== id));
+    setTimeout(async () => {
+      const updatedList = transactions.filter((t) => t.id !== id);
+      setTransactions(updatedList);
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(updatedList));
       setDeletingIds((prev) => prev.filter((delId) => delId !== id));
       if (editingTransaction?.id === id) closeForm();
+
+      try {
+        await deleteDoc(doc(db, "users", user.uid, "notes", id));
+      } catch (e) {
+        console.error(e);
+      }
     }, 600);
+  };
+
+  const handleLogout = async () => {
+    if (window.confirm(t.logoutConfirm)) {
+      await signOut(auth);
+      setNickname(null);
+      localStorage.removeItem("finance-app:nickname");
+    }
   };
 
   const handleExport = () => {
@@ -184,47 +304,34 @@ export function FinanceApp() {
     const blob = new Blob([dataStr], { type: "application/json" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
-    const dateStamp = new Date().toISOString().split("T")[0];
     a.href = url;
-    a.download = `finance-backup-${dateStamp}.json`;
+    a.download = `finance-backup-${new Date().toISOString().split("T")[0]}.json`;
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
     URL.revokeObjectURL(url);
   };
 
-  const handleImportClick = () => {
-    fileInputRef.current?.click();
-  };
-
-  const isTransactionShape = (value: unknown): value is Transaction => {
-    if (!value || typeof value !== "object") return false;
-    const t = value as Record<string, unknown>;
-    return (
-      typeof t.id === "string" &&
-      typeof t.amount === "number" &&
-      (t.type === "income" || t.type === "expense") &&
-      typeof t.date === "string" &&
-      typeof t.category === "string"
-    );
-  };
-
-  const handleImportFile = (e: ChangeEvent<HTMLInputElement>) => {
+  const handleImportClick = () => fileInputRef.current?.click();
+  const handleImportFile = async (e: ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     e.target.value = "";
-    if (!file) return;
-
+    if (!file || !user) return;
     const reader = new FileReader();
-    reader.onload = () => {
+    reader.onload = async () => {
       try {
         const parsed = JSON.parse(String(reader.result));
-        if (!Array.isArray(parsed) || !parsed.every(isTransactionShape)) {
+        if (!Array.isArray(parsed) || !parsed.every(isTransactionShape))
           throw new Error("invalid shape");
-        }
-        const confirmed = window.confirm(t.alertImport);
-        if (confirmed) {
+        if (window.confirm(t.alertImport)) {
           setTransactions(parsed);
           setIsSettingsOpen(false);
+          const batch = writeBatch(db);
+          parsed.forEach((tx) => {
+            const docRef = doc(db, "users", user.uid, "notes", tx.id);
+            batch.set(docRef, { encryptedPayload: encryptData(tx) });
+          });
+          await batch.commit();
         }
       } catch {
         window.alert(t.alertImportError);
@@ -233,13 +340,50 @@ export function FinanceApp() {
     reader.readAsText(file);
   };
 
-  const handleClearAll = () => {
-    const confirmed = window.confirm(t.alertClear);
-    if (confirmed) {
+  const isTransactionShape = (value: unknown): value is Transaction => {
+    if (!value || typeof value !== "object") return false;
+    const tx = value as Record<string, unknown>;
+    return (
+      typeof tx.id === "string" &&
+      typeof tx.amount === "number" &&
+      (tx.type === "income" || tx.type === "expense") &&
+      typeof tx.date === "string" &&
+      typeof tx.category === "string"
+    );
+  };
+
+  const handleClearAll = async () => {
+    if (!user) return;
+    if (window.confirm(t.alertClear)) {
       setTransactions([]);
       setIsSettingsOpen(false);
+      localStorage.removeItem(STORAGE_KEY);
+
+      try {
+        const notesRef = collection(db, "users", user.uid, "notes");
+        const snapshot = await getDocs(notesRef);
+        const batch = writeBatch(db);
+        snapshot.forEach((document) => {
+          batch.delete(doc(db, "users", user.uid, "notes", document.id));
+        });
+        await batch.commit();
+      } catch (e) {
+        console.error(e);
+      }
     }
   };
+
+  if (isAuthChecking) {
+    return (
+      <div className="finance-dashboard loading-screen">
+        <div className="loading-text">{t.loginLoading}</div>
+      </div>
+    );
+  }
+
+  if (!user) {
+    return <LoginScreen onLoginSuccess={setNickname} />;
+  }
 
   return (
     <div className="finance-dashboard">
@@ -253,6 +397,7 @@ export function FinanceApp() {
           >
             {t.langToggle}
           </button>
+
           <button
             type="button"
             className="settings-btn"
@@ -261,8 +406,19 @@ export function FinanceApp() {
           >
             ⚙️
           </button>
+
+          <button
+            type="button"
+            className="settings-btn logout-btn"
+            onClick={handleLogout}
+            title={t.logoutBtnTitle}
+          >
+            🚪
+          </button>
         </div>
       </header>
+
+      {isSyncing && <div className="sync-indicator">{t.syncing}</div>}
 
       <main className="app-content">
         {activeTab === "overview" && (
@@ -351,7 +507,7 @@ export function FinanceApp() {
       <BottomSheet
         isOpen={isFormOpen}
         onClose={closeForm}
-        title={editingTransaction ? "✏️" : "+"}
+        title={editingTransaction ? t.formTitleEdit : t.formTitleAdd}
       >
         <TransactionForm
           onAdd={handleAddTransaction}
@@ -369,7 +525,11 @@ export function FinanceApp() {
         title={t.settingsTitle}
       >
         <div className="settings-sheet">
-          <p className="settings-hint">{t.settingsHint}</p>
+          <p className="settings-user-info">
+            {t.userPrefix} {nickname || "Анонім"}
+          </p>
+          <p className="settings-hint-center">{t.settingsHint}</p>
+
           <button type="button" className="btn-export" onClick={handleExport}>
             {t.btnExport}
           </button>
@@ -385,7 +545,7 @@ export function FinanceApp() {
             type="file"
             accept="application/json"
             onChange={handleImportFile}
-            style={{ display: "none" }}
+            className="hidden-input"
           />
           <button type="button" className="btn-danger" onClick={handleClearAll}>
             {t.btnClear}
