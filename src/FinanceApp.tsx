@@ -140,7 +140,6 @@ export function FinanceApp() {
         }
       } else {
         setTransactions([]);
-        localStorage.removeItem(STORAGE_KEY);
       }
       setIsAuthChecking(false);
     });
@@ -296,6 +295,9 @@ export function FinanceApp() {
       await signOut(auth);
       setNickname(null);
       localStorage.removeItem("finance-app:nickname");
+
+      setTransactions([]);
+      localStorage.removeItem(STORAGE_KEY);
     }
   };
 
