@@ -68,6 +68,19 @@ export function TransactionForm({
     }
   };
 
+  const handleAmountChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    let val = e.target.value.replace(",", ".");
+    val = val.replace(/[^0-9.]/g, "");
+    const parts = val.split(".");
+    if (parts.length > 2) {
+      val = parts[0] + "." + parts.slice(1).join("").replace(/\./g, "");
+    }
+    setFormData((prev) => ({
+      ...prev,
+      amount: val,
+    }));
+  };
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     const amountNum = parseFloat(formData.amount);
@@ -138,12 +151,12 @@ export function TransactionForm({
         <label className="form-label">{t.formAmount}</label>
         <input
           className="form-input"
-          type="number"
+          type="text"
           inputMode="decimal"
           step="0.01"
           name="amount"
           value={formData.amount}
-          onChange={handleInputChange}
+          onChange={handleAmountChange}
           placeholder="0.00"
           required
         />
