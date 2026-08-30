@@ -82,6 +82,21 @@ export function FinanceApp() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
 
+  const [isDarkMode, setIsDarkMode] = useState(() => {
+    if (typeof window === "undefined") return false;
+    return localStorage.getItem("finance-app:theme") === "dark";
+  });
+
+  useEffect(() => {
+    if (isDarkMode) {
+      document.body.classList.add("dark-theme");
+      localStorage.setItem("finance-app:theme", "dark");
+    } else {
+      document.body.classList.remove("dark-theme");
+      localStorage.setItem("finance-app:theme", "light");
+    }
+  }, [isDarkMode]);
+
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
       setUser(currentUser);
@@ -99,7 +114,6 @@ export function FinanceApp() {
 
         setIsSyncing(true);
         try {
-          // 1. Загрузка транзакций
           const notesRef = collection(db, "users", currentUser.uid, "notes");
           const snapshot = await getDocs(notesRef);
 
@@ -150,7 +164,6 @@ export function FinanceApp() {
             }
           }
 
-          // 2. Загрузка лимитов
           const limitsRef = doc(
             db,
             "users",
@@ -611,6 +624,14 @@ export function FinanceApp() {
           />
           <button type="button" className="btn-danger" onClick={handleClearAll}>
             {t.btnClear}
+          </button>
+
+          <button
+            type="button"
+            className="btn-easter-egg"
+            onClick={() => setIsDarkMode(!isDarkMode)}
+          >
+            {isDarkMode ? `${t.lightTheme}` : `${t.darkTheme}`}
           </button>
 
           <button

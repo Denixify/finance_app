@@ -1434,3 +1434,153 @@ input[type="date"].form-input {
     }
   }
 }
+
+body.dark-theme {
+  background: #0f172a;
+
+  .finance-dashboard {
+    background: #1e293b;
+  }
+
+  .app-topbar {
+    background: rgba(30, 41, 59, 0.92);
+    border-bottom-color: rgba(255, 255, 255, 0.05);
+    h1 {
+      color: #f8fafc;
+    }
+  }
+
+  .lang-toggle-btn,
+  .settings-btn {
+    background: #334155;
+    color: #f8fafc;
+  }
+
+  .card,
+  .chart-container,
+  .month-switcher,
+  .month-stat,
+  .category-breakdown,
+  .calendar-panel,
+  .calendar-day-detail,
+  .transaction-item,
+  .empty-state,
+  .bottom-sheet,
+  .login-card {
+    background: #334155;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+    color: #f8fafc;
+
+    h3,
+    h2,
+    p,
+    .stat-value,
+    .tx-category,
+    .form-label,
+    .cal-cell,
+    .panel-title {
+      color: #f8fafc;
+    }
+
+    .stat-label,
+    .tx-desc,
+    .calendar-weekdays span,
+    .settings-hint,
+    .settings-meta,
+    .day-empty {
+      color: #94a3b8;
+    }
+  }
+
+  .card.balance p {
+    color: #f8fafc;
+  }
+
+  .tab-bar {
+    background: rgba(51, 65, 85, 0.95);
+    border-top-color: rgba(255, 255, 255, 0.05);
+  }
+
+  .tab-item {
+    color: #e3e6eb;
+    &.active {
+      color: var(--accent);
+    }
+  }
+
+  .form-input,
+  .form-select {
+    background-color: #1e293b;
+    border-color: #475569;
+    color: #f8fafc;
+  }
+
+  .btn-cancel,
+  .btn-import,
+  .cal-clear,
+  .sheet-close {
+    background-color: #1e293b;
+    color: #f8fafc;
+  }
+
+  .transaction-item {
+    .btn-edit {
+      background-color: #1e293b;
+      color: var(--accent);
+    }
+    .btn-delete {
+      background-color: #451a1a;
+      color: #ff4d4f;
+    }
+  }
+
+  .transaction-item.editing {
+    background-color: #1e293b;
+  }
+
+  .sheet-handle {
+    background: #475569;
+  }
+  .empty-state,
+  .chart-empty-state {
+    background: #1e293b;
+    border-color: #475569;
+  }
+
+  .category-bar-track {
+    background: #1e293b;
+  }
+  .category-bar-label span {
+    color: #f8fafc;
+  }
+
+  .date-filter-banner {
+    background: #334155;
+    color: #f8fafc;
+  }
+
+  .list-header h2 {
+    color: #f8fafc;
+  }
+
+  .recharts-cartesian-axis-tick-value {
+    fill: #94a3b8 !important;
+  }
+  .recharts-legend-item-text {
+    color: #f8fafc !important;
+  }
+  .recharts-tooltip-wrapper .recharts-default-tooltip {
+    background-color: #334155 !important;
+    border-color: #475569 !important;
+    border-radius: 8px !important;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4) !important;
+
+    p,
+    span,
+    li,
+    .recharts-tooltip-label,
+    .recharts-tooltip-item {
+      color: #f8fafc !important;
+    }
+  }
+}
