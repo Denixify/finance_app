@@ -27,11 +27,18 @@ export function TransactionList({
 }: TransactionListProps) {
   const { t } = useLang();
 
-  const filteredTransactions = transactions.filter((tx) => {
-    const matchesType = filter === "all" || tx.type === filter;
-    const matchesDate = !selectedDate || tx.date === selectedDate;
-    return matchesType && matchesDate;
-  });
+  const filteredTransactions = transactions
+    .filter((tx) => {
+      const matchesType = filter === "all" || tx.type === filter;
+      const matchesDate = !selectedDate || tx.date === selectedDate;
+      return matchesType && matchesDate;
+    })
+    .sort((a, b) => {
+      const dateDiff = new Date(b.date).getTime() - new Date(a.date).getTime();
+      if (dateDiff !== 0) return dateDiff;
+
+      return b.id.localeCompare(a.id);
+    });
 
   return (
     <section className="transactions-list-panel">

@@ -7,15 +7,20 @@ import { useLang } from "./LanguageContext";
 
 interface AnalyticsTabProps {
   transactions: Transaction[];
+  limits: Record<string, number>;
+  onUpdateLimits: (newLimits: Record<string, number>) => void;
 }
 
 const CATEGORY_COLORS = [
   "#FF6B6B",
-  "#4ECDC4",
-  "#45B7D1",
-  "#F7DC6F",
-  "#9B59B6",
+  "#000794",
+  "#00743E",
+  "#F9D12F",
+  "#480064",
   "#E67E22",
+  "#8BB200",
+  "#D900FF",
+  "#00ffE1",
 ];
 
 function sumByType(list: Transaction[], type: Transaction["type"]): number {
@@ -48,8 +53,13 @@ function DeltaBadge({
   );
 }
 
-export function AnalyticsTab({ transactions }: AnalyticsTabProps) {
+export function AnalyticsTab({
+  transactions,
+  limits,
+  onUpdateLimits,
+}: AnalyticsTabProps) {
   const { t } = useLang();
+
   const [viewDate, setViewDate] = useState(() => new Date());
   const year = viewDate.getFullYear();
   const month = viewDate.getMonth();
@@ -61,10 +71,28 @@ export function AnalyticsTab({ transactions }: AnalyticsTabProps) {
   const goPrevMonth = () => setViewDate(new Date(year, month - 1, 1));
   const goNextMonth = () => setViewDate(new Date(year, month + 1, 1));
 
+  const [showLimitForm, setShowLimitForm] = useState(false);
+  const [limitCategory, setLimitCategory] = useState(t.catExpense[0]);
+  const [limitAmount, setLimitAmount] = useState("");
+
+  const handleSaveLimit = () => {
+    const amount = parseFloat(limitAmount);
+    if (amount > 0) {
+      onUpdateLimits({ ...limits, [limitCategory]: amount });
+    } else {
+      const newLimits = { ...limits };
+      delete newLimits[limitCategory];
+      onUpdateLimits(newLimits);
+    }
+    setShowLimitForm(false);
+    setLimitAmount("");
+  };
+
   const monthTransactions = useMemo(
     () => transactions.filter((tx) => tx.date.startsWith(currentKey)),
     [transactions, currentKey],
   );
+
   const prevMonthTransactions = useMemo(
     () => transactions.filter((tx) => tx.date.startsWith(prevKey)),
     [transactions, prevKey],
@@ -194,26 +222,101 @@ export function AnalyticsTab({ transactions }: AnalyticsTabProps) {
             <div className="category-breakdown">
               <h3>{t.breakdownTitle}</h3>
               <div className="category-bars">
-                {categoryBreakdown.map((c, i) => (
-                  <div className="category-bar-row" key={c.name}>
-                    <div className="category-bar-label">
-                      <span>{c.name}</span>
-                      <span>
-                        €{c.value.toFixed(2)} · {c.percent}%
-                      </span>
+                {categoryBreakdown.map((c, i) => {
+                  const limit = limits[c.name];
+                  const isOverLimit = limit && c.value > limit;
+                  const fillPercent = limit
+                    ? Math.min((c.value / limit) * 100, 100)
+                    : c.percent;
+
+                  return (
+                    <div className="category-bar-row" key={c.name}>
+                      <div className="category-bar-label">
+                        <span>{c.name}</span>
+                        <span>
+                          {limit
+                            ? `€${c.value.toFixed(2)} / €${limit.toFixed(2)}`
+                            : `€${c.value.toFixed(2)} · ${c.percent}%`}
+                        </span>
+                      </div>
+                      <div className="category-bar-track">
+                        <div
+                          className="category-bar-fill"
+                          style={{
+                            width: `${fillPercent}%`,
+                            backgroundColor: isOverLimit
+                              ? "#e74c3c"
+                              : CATEGORY_COLORS[i % CATEGORY_COLORS.length],
+                          }}
+                        />
+                      </div>
                     </div>
-                    <div className="category-bar-track">
-                      <div
-                        className="category-bar-fill"
-                        style={{
-                          width: `${c.percent}%`,
-                          backgroundColor:
-                            CATEGORY_COLORS[i % CATEGORY_COLORS.length],
-                        }}
-                      />
-                    </div>
+                  );
+                })}
+
+                <div
+                  className={`limit-toggle-wrapper ${showLimitForm ? "active" : ""}`}
+                >
+                  <button
+                    className="cal-clear limit-btn"
+                    onClick={() => {
+                      setLimitCategory(t.catExpense[0]);
+                      setShowLimitForm(true);
+                    }}
+                    style={{
+                      width: "100%",
+                      fontFamily: "inherit",
+                      fontSize: "15px",
+                      fontWeight: 800,
+                    }}
+                  >
+                    + {t.btnAddLimit}
+                  </button>
+
+                  <div className="form-group limit-form">
+                    <select
+                      className="form-select"
+                      value={limitCategory}
+                      onChange={(e) => setLimitCategory(e.target.value)}
+                      style={{ flex: 2 }}
+                    >
+                      {t.catExpense.map((cat) => (
+                        <option key={cat} value={cat}>
+                          {cat}
+                        </option>
+                      ))}
+                    </select>
+
+                    <input
+                      type="text"
+                      inputMode="decimal"
+                      className="form-input"
+                      placeholder="0.00"
+                      value={limitAmount}
+                      onChange={(e) => {
+                        let val = e.target.value.replace(",", ".");
+                        val = val.replace(/[^0-9.]/g, "");
+                        setLimitAmount(val);
+                      }}
+                      style={{ flex: 1 }}
+                    />
+
+                    <button
+                      className="btn-save"
+                      onClick={handleSaveLimit}
+                      style={{ padding: "0 16px", flex: "none" }}
+                    >
+                      ✓
+                    </button>
+                    <button
+                      className="btn-cancel"
+                      onClick={() => setShowLimitForm(false)}
+                      style={{ padding: "0 16px", flex: "none" }}
+                    >
+                      ✕
+                    </button>
                   </div>
-                ))}
+                </div>
               </div>
             </div>
           )}

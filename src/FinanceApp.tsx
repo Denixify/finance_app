@@ -24,11 +24,13 @@ import {
   setDoc,
   deleteDoc,
   getDocs,
+  getDoc,
   writeBatch,
 } from "firebase/firestore";
 import { encryptData, decryptData } from "./cryptoUtils";
 
 const STORAGE_KEY = "finance-app:transactions";
+const LIMITS_KEY = "finance-app:limits";
 
 function loadStoredTransactions(): Transaction[] {
   if (typeof window === "undefined") return [];
@@ -39,6 +41,16 @@ function loadStoredTransactions(): Transaction[] {
     return Array.isArray(parsed) ? parsed : [];
   } catch {
     return [];
+  }
+}
+
+function loadStoredLimits(): Record<string, number> {
+  if (typeof window === "undefined") return {};
+  try {
+    const raw = window.localStorage.getItem(LIMITS_KEY);
+    return raw ? JSON.parse(raw) : {};
+  } catch {
+    return {};
   }
 }
 
@@ -55,6 +67,9 @@ export function FinanceApp() {
   const [transactions, setTransactions] = useState<Transaction[]>(
     loadStoredTransactions,
   );
+  const [limits, setLimits] =
+    useState<Record<string, number>>(loadStoredLimits);
+
   const [filter, setFilter] = useState<"all" | "income" | "expense">("all");
   const [deletingIds, setDeletingIds] = useState<string[]>([]);
   const [activeTab, setActiveTab] = useState<AppTab>("overview");
@@ -84,6 +99,7 @@ export function FinanceApp() {
 
         setIsSyncing(true);
         try {
+          // 1. Загрузка транзакций
           const notesRef = collection(db, "users", currentUser.uid, "notes");
           const snapshot = await getDocs(notesRef);
 
@@ -133,6 +149,27 @@ export function FinanceApp() {
               setTransactions(localData);
             }
           }
+
+          // 2. Загрузка лимитов
+          const limitsRef = doc(
+            db,
+            "users",
+            currentUser.uid,
+            "limits",
+            "categories",
+          );
+          const limitsSnap = await getDoc(limitsRef);
+
+          if (limitsSnap.exists()) {
+            const fetchedLimits = limitsSnap.data() as Record<string, number>;
+            setLimits(fetchedLimits);
+            localStorage.setItem(LIMITS_KEY, JSON.stringify(fetchedLimits));
+          } else {
+            const localLimits = loadStoredLimits();
+            if (Object.keys(localLimits).length > 0) {
+              await setDoc(limitsRef, localLimits);
+            }
+          }
         } catch (error) {
           console.error("Fetch error:", error);
         } finally {
@@ -140,6 +177,7 @@ export function FinanceApp() {
         }
       } else {
         setTransactions([]);
+        setLimits({});
       }
       setIsAuthChecking(false);
     });
@@ -221,10 +259,12 @@ export function FinanceApp() {
     setEditingTransaction(null);
     setIsFormOpen(true);
   };
+
   const openEditForm = (t: Transaction) => {
     setEditingTransaction(t);
     setIsFormOpen(true);
   };
+
   const closeForm = () => {
     setIsFormOpen(false);
     setEditingTransaction(null);
@@ -233,10 +273,7 @@ export function FinanceApp() {
   const handleAddTransaction = async (newTxData: Omit<Transaction, "id">) => {
     if (!user) return;
     const newTransaction: Transaction = {
-      id:
-        typeof crypto.randomUUID === "function"
-          ? crypto.randomUUID()
-          : Date.now().toString(),
+      id: Date.now().toString(),
       ...newTxData,
     };
 
@@ -290,14 +327,32 @@ export function FinanceApp() {
     }, 600);
   };
 
+  const handleUpdateLimits = async (newLimits: Record<string, number>) => {
+    setLimits(newLimits);
+    localStorage.setItem(LIMITS_KEY, JSON.stringify(newLimits));
+    if (user) {
+      try {
+        await setDoc(
+          doc(db, "users", user.uid, "limits", "categories"),
+          newLimits,
+        );
+      } catch (e) {
+        console.error("Error saving limits:", e);
+      }
+    }
+  };
+
   const handleLogout = async () => {
     if (window.confirm(t.logoutConfirm)) {
       await signOut(auth);
       setNickname(null);
+
       localStorage.removeItem("finance-app:nickname");
+      localStorage.removeItem(STORAGE_KEY);
+      localStorage.removeItem(LIMITS_KEY);
 
       setTransactions([]);
-      localStorage.removeItem(STORAGE_KEY);
+      setLimits({});
     }
   };
 
@@ -358,8 +413,10 @@ export function FinanceApp() {
     if (!user) return;
     if (window.confirm(t.alertClear)) {
       setTransactions([]);
+      setLimits({});
       setIsSettingsOpen(false);
       localStorage.removeItem(STORAGE_KEY);
+      localStorage.removeItem(LIMITS_KEY);
 
       try {
         const notesRef = collection(db, "users", user.uid, "notes");
@@ -369,6 +426,7 @@ export function FinanceApp() {
           batch.delete(doc(db, "users", user.uid, "notes", document.id));
         });
         await batch.commit();
+        await deleteDoc(doc(db, "users", user.uid, "limits", "categories"));
       } catch (e) {
         console.error(e);
       }
@@ -399,7 +457,6 @@ export function FinanceApp() {
           >
             {t.langToggle}
           </button>
-
           <button
             type="button"
             className="settings-btn"
@@ -408,7 +465,6 @@ export function FinanceApp() {
           >
             ⚙️
           </button>
-
           <button
             type="button"
             className="settings-btn logout-btn"
@@ -482,7 +538,11 @@ export function FinanceApp() {
         )}
 
         {activeTab === "analytics" && (
-          <AnalyticsTab transactions={transactions} />
+          <AnalyticsTab
+            transactions={transactions}
+            limits={limits}
+            onUpdateLimits={handleUpdateLimits}
+          />
         )}
 
         {activeTab === "history" && (
