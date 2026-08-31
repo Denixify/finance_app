@@ -31,7 +31,7 @@ body {
   );
 }
 
-.finance-dashboard:has(input:focus, select:focus) {
+.finance-dashboard:has(input:focus) {
   .tab-bar {
     display: none !important;
   }
