@@ -31,6 +31,12 @@ body {
   );
 }
 
+.finance-dashboard:has(input:focus, select:focus) {
+  .tab-bar {
+    display: none !important;
+  }
+}
+
 .app-topbar {
   display: flex;
   align-items: center;
