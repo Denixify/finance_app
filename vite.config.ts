@@ -8,13 +8,20 @@ export default defineConfig({
     react(),
     VitePWA({
       registerType: "autoUpdate",
-      includeAssets: ["favicon.ico", "apple-touch-icon.png"],
+      workbox: {
+        globPatterns: ["**/*.{js,css,html,png,svg,ico,woff,woff2}"],
+        navigateFallback: "index.html",
+        cleanupOutdatedCaches: true,
+      },
+      includeAssets: ["apple-touch-icon.png"],
       manifest: {
         name: "Фінансовий Дашборд",
         short_name: "Фінанси",
         description: "Персональний фінансовий трекер",
         theme_color: "#f5f7fa",
         background_color: "#f5f7fa",
+        start_url: "/finance_app/",
+        scope: "/finance_app/",
         display: "standalone",
         orientation: "portrait",
         icons: [

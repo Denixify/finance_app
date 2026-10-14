@@ -1,7 +1,7 @@
 import { useState, useMemo, useEffect, useRef } from "react";
 import type { ChangeEvent } from "react";
 import "./FinanceApp.scss";
-import type { Transaction } from "./types";
+import type { Transaction, SavingEntry } from "./types";
 import { SummaryCards } from "./components/SummaryCards";
 import { ChartsSection, type LineChartItem } from "./components/ChartsSection";
 import { TransactionForm } from "./components/TransactionForm";
@@ -10,8 +10,12 @@ import { TransactionItem } from "./components/TransactionItem";
 import { Calendar } from "./components/Calendar";
 import { TabBar } from "./components/TabBar";
 import type { AppTab } from "./components/TabBar";
+
+type ActiveView = AppTab | "savings";
 import { BottomSheet } from "./components/BottomSheet";
 import { AnalyticsTab } from "./components/AnalyticsTab";
+import { SavingsTab } from "./components/SavingsTab";
+import { SavingsForm } from "./components/SavingsForm";
 import { useLang } from "./components/LanguageContext";
 import { MinesweeperApp } from "./EasterEgg/MinesweeperApp";
 import { LoginScreen } from "./components/LoginScreen";
@@ -31,6 +35,18 @@ import { encryptData, decryptData } from "./cryptoUtils";
 
 const STORAGE_KEY = "finance-app:transactions";
 const LIMITS_KEY = "finance-app:limits";
+const SAVINGS_KEY = "finance-app:savings";
+
+function loadStoredSavings(): SavingEntry[] {
+  if (typeof window === "undefined") return [];
+  try {
+    const raw = window.localStorage.getItem(SAVINGS_KEY);
+    const parsed = raw ? JSON.parse(raw) : [];
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
 
 function loadStoredTransactions(): Transaction[] {
   if (typeof window === "undefined") return [];
@@ -70,9 +86,16 @@ export function FinanceApp() {
   const [limits, setLimits] =
     useState<Record<string, number>>(loadStoredLimits);
 
+  const [savings, setSavings] = useState<SavingEntry[]>(loadStoredSavings);
+  const [editingSaving, setEditingSaving] = useState<SavingEntry | null>(null);
+  const [isOffline, setIsOffline] = useState(
+    typeof navigator !== "undefined" && !navigator.onLine,
+  );
+  const [syncTick, setSyncTick] = useState(0);
+
   const [filter, setFilter] = useState<"all" | "income" | "expense">("all");
   const [deletingIds, setDeletingIds] = useState<string[]>([]);
-  const [activeTab, setActiveTab] = useState<AppTab>("overview");
+  const [activeTab, setActiveTab] = useState<ActiveView>("overview");
   const [editingTransaction, setEditingTransaction] =
     useState<Transaction | null>(null);
   const [isFormOpen, setIsFormOpen] = useState(false);
@@ -98,7 +121,7 @@ export function FinanceApp() {
   }, [isDarkMode]);
 
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
+    const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
       setUser(currentUser);
       if (currentUser) {
         if (
@@ -111,85 +134,9 @@ export function FinanceApp() {
           setNickname(capitalized);
           localStorage.setItem("finance-app:nickname", capitalized);
         }
-
-        setIsSyncing(true);
-        try {
-          const notesRef = collection(db, "users", currentUser.uid, "notes");
-          const snapshot = await getDocs(notesRef);
-
-          if (!snapshot.empty) {
-            const firebaseTransactions: Transaction[] = [];
-            snapshot.forEach((docSnap) => {
-              const data = docSnap.data();
-              if (data.encryptedPayload) {
-                const decrypted = decryptData(data.encryptedPayload);
-                if (decrypted) {
-                  firebaseTransactions.push({
-                    id: docSnap.id,
-                    ...decrypted,
-                  } as Transaction);
-                }
-              } else {
-                firebaseTransactions.push({
-                  id: docSnap.id,
-                  ...data,
-                } as Transaction);
-              }
-            });
-
-            firebaseTransactions.sort(
-              (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime(),
-            );
-            setTransactions(firebaseTransactions);
-            localStorage.setItem(
-              STORAGE_KEY,
-              JSON.stringify(firebaseTransactions),
-            );
-          } else {
-            const localData = loadStoredTransactions();
-            if (localData.length > 0) {
-              const batch = writeBatch(db);
-              localData.forEach((tx) => {
-                const docRef = doc(
-                  db,
-                  "users",
-                  currentUser.uid,
-                  "notes",
-                  tx.id,
-                );
-                batch.set(docRef, { encryptedPayload: encryptData(tx) });
-              });
-              await batch.commit();
-              setTransactions(localData);
-            }
-          }
-
-          const limitsRef = doc(
-            db,
-            "users",
-            currentUser.uid,
-            "limits",
-            "categories",
-          );
-          const limitsSnap = await getDoc(limitsRef);
-
-          if (limitsSnap.exists()) {
-            const fetchedLimits = limitsSnap.data() as Record<string, number>;
-            setLimits(fetchedLimits);
-            localStorage.setItem(LIMITS_KEY, JSON.stringify(fetchedLimits));
-          } else {
-            const localLimits = loadStoredLimits();
-            if (Object.keys(localLimits).length > 0) {
-              await setDoc(limitsRef, localLimits);
-            }
-          }
-        } catch (error) {
-          console.error("Fetch error:", error);
-        } finally {
-          setIsSyncing(false);
-        }
       } else {
         setTransactions([]);
+        setSavings([]);
         setLimits({});
       }
       setIsAuthChecking(false);
@@ -197,6 +144,131 @@ export function FinanceApp() {
 
     return () => unsubscribe();
   }, []);
+
+  useEffect(() => {
+    const goOnline = () => {
+      setIsOffline(false);
+      setSyncTick((n) => n + 1);
+    };
+    const goOffline = () => setIsOffline(true);
+    window.addEventListener("online", goOnline);
+    window.addEventListener("offline", goOffline);
+    return () => {
+      window.removeEventListener("online", goOnline);
+      window.removeEventListener("offline", goOffline);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!user || !navigator.onLine) return;
+    const currentUser = user;
+    let cancelled = false;
+
+    (async () => {
+      setIsSyncing(true);
+      try {
+        const notesRef = collection(db, "users", currentUser.uid, "notes");
+        const snapshot = await getDocs(notesRef);
+        if (cancelled) return;
+
+        if (!snapshot.empty) {
+          const firebaseTransactions: Transaction[] = [];
+          snapshot.forEach((docSnap) => {
+            const data = docSnap.data();
+            if (data.encryptedPayload) {
+              const decrypted = decryptData(data.encryptedPayload);
+              if (decrypted) {
+                firebaseTransactions.push({
+                  id: docSnap.id,
+                  ...decrypted,
+                } as Transaction);
+              }
+            } else {
+              firebaseTransactions.push({
+                id: docSnap.id,
+                ...data,
+              } as Transaction);
+            }
+          });
+
+          firebaseTransactions.sort(
+            (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime(),
+          );
+          setTransactions(firebaseTransactions);
+          localStorage.setItem(
+            STORAGE_KEY,
+            JSON.stringify(firebaseTransactions),
+          );
+        } else {
+          const localData = loadStoredTransactions();
+          if (localData.length > 0) {
+            const batch = writeBatch(db);
+            localData.forEach((tx) => {
+              const docRef = doc(db, "users", currentUser.uid, "notes", tx.id);
+              batch.set(docRef, { encryptedPayload: encryptData(tx) });
+            });
+            await batch.commit();
+            setTransactions(localData);
+          }
+        }
+
+        const limitsRef = doc(
+          db,
+          "users",
+          currentUser.uid,
+          "limits",
+          "categories",
+        );
+        const limitsSnap = await getDoc(limitsRef);
+        if (cancelled) return;
+
+        if (limitsSnap.exists()) {
+          const fetchedLimits = limitsSnap.data() as Record<string, number>;
+          setLimits(fetchedLimits);
+          localStorage.setItem(LIMITS_KEY, JSON.stringify(fetchedLimits));
+        } else {
+          const localLimits = loadStoredLimits();
+          if (Object.keys(localLimits).length > 0) {
+            await setDoc(limitsRef, localLimits);
+          }
+        }
+
+        const savingsRef = collection(db, "users", currentUser.uid, "savings");
+        const savingsSnap = await getDocs(savingsRef);
+        if (cancelled) return;
+        if (!savingsSnap.empty) {
+          const remote: SavingEntry[] = [];
+          savingsSnap.forEach((docSnap) => {
+            const decrypted = decryptData<Omit<SavingEntry, "id">>(
+              docSnap.data().encryptedPayload,
+            );
+            if (decrypted) remote.push({ ...decrypted, id: docSnap.id });
+          });
+          setSavings(remote);
+          localStorage.setItem(SAVINGS_KEY, JSON.stringify(remote));
+        } else {
+          const localSavings = loadStoredSavings();
+          if (localSavings.length > 0) {
+            const batch = writeBatch(db);
+            localSavings.forEach((e) => {
+              batch.set(doc(db, "users", currentUser.uid, "savings", e.id), {
+                encryptedPayload: encryptData(e),
+              });
+            });
+            await batch.commit();
+          }
+        }
+      } catch (error) {
+        console.error("Fetch error:", error);
+      } finally {
+        if (!cancelled) setIsSyncing(false);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [user, syncTick]);
 
   useEffect(() => {
     if (isMinesweeperOpen) {
@@ -269,6 +341,7 @@ export function FinanceApp() {
   }, [transactions, selectedDate]);
 
   const openAddForm = () => {
+    setEditingSaving(null);
     setEditingTransaction(null);
     setIsFormOpen(true);
   };
@@ -281,6 +354,7 @@ export function FinanceApp() {
   const closeForm = () => {
     setIsFormOpen(false);
     setEditingTransaction(null);
+    setEditingSaving(null);
   };
 
   const handleAddTransaction = async (newTxData: Omit<Transaction, "id">) => {
@@ -355,6 +429,52 @@ export function FinanceApp() {
     }
   };
 
+  const persistSavings = (list: SavingEntry[]) => {
+    setSavings(list);
+    localStorage.setItem(SAVINGS_KEY, JSON.stringify(list));
+  };
+
+  const handleSubmitSaving = async (
+    data: Omit<SavingEntry, "id"> & { id?: string },
+  ) => {
+    if (!user) return;
+    const entry: SavingEntry = {
+      ...data,
+      id: data.id ?? Date.now().toString(),
+    };
+    persistSavings(
+      data.id
+        ? savings.map((e) => (e.id === entry.id ? entry : e))
+        : [entry, ...savings],
+    );
+    closeForm();
+    try {
+      await setDoc(doc(db, "users", user.uid, "savings", entry.id), {
+        encryptedPayload: encryptData(entry),
+      });
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  const handleDeleteSaving = (id: string) => {
+    if (!user) return;
+    setDeletingIds((prev) => [...prev, id]);
+    setTimeout(async () => {
+      setSavings((prev) => {
+        const next = prev.filter((e) => e.id !== id);
+        localStorage.setItem(SAVINGS_KEY, JSON.stringify(next));
+        return next;
+      });
+      setDeletingIds((prev) => prev.filter((d) => d !== id));
+      try {
+        await deleteDoc(doc(db, "users", user.uid, "savings", id));
+      } catch (e) {
+        console.error(e);
+      }
+    }, 600);
+  };
+
   const handleLogout = async () => {
     if (window.confirm(t.logoutConfirm)) {
       await signOut(auth);
@@ -363,7 +483,9 @@ export function FinanceApp() {
       localStorage.removeItem("finance-app:nickname");
       localStorage.removeItem(STORAGE_KEY);
       localStorage.removeItem(LIMITS_KEY);
+      localStorage.removeItem(SAVINGS_KEY);
 
+      setSavings([]);
       setTransactions([]);
       setLimits({});
     }
@@ -426,8 +548,10 @@ export function FinanceApp() {
     if (!user) return;
     if (window.confirm(t.alertClear)) {
       setTransactions([]);
+      setSavings([]);
       setLimits({});
       setIsSettingsOpen(false);
+      localStorage.removeItem(SAVINGS_KEY);
       localStorage.removeItem(STORAGE_KEY);
       localStorage.removeItem(LIMITS_KEY);
 
@@ -439,6 +563,12 @@ export function FinanceApp() {
           batch.delete(doc(db, "users", user.uid, "notes", document.id));
         });
         await batch.commit();
+        const savingsSnap = await getDocs(
+          collection(db, "users", user.uid, "savings"),
+        );
+        const savingsBatch = writeBatch(db);
+        savingsSnap.forEach((d) => savingsBatch.delete(d.ref));
+        await savingsBatch.commit();
         await deleteDoc(doc(db, "users", user.uid, "limits", "categories"));
       } catch (e) {
         console.error(e);
@@ -472,6 +602,19 @@ export function FinanceApp() {
           </button>
           <button
             type="button"
+            className={`settings-btn ${activeTab === "savings" ? "active" : ""}`}
+            onClick={() =>
+              setActiveTab((prev) =>
+                prev === "savings" ? "overview" : "savings",
+              )
+            }
+            title={t.savingsTitle}
+            aria-label={t.savingsTitle}
+          >
+            🐷
+          </button>
+          <button
+            type="button"
             className="settings-btn"
             onClick={() => setIsSettingsOpen(true)}
             aria-label={t.settingsTitle}
@@ -489,7 +632,10 @@ export function FinanceApp() {
         </div>
       </header>
 
-      {isSyncing && <div className="sync-indicator">{t.syncing}</div>}
+      {isOffline && <div className="sync-indicator">{t.offlineBanner}</div>}
+      {isSyncing && !isOffline && (
+        <div className="sync-indicator">{t.syncing}</div>
+      )}
 
       <main className="app-content">
         {activeTab === "overview" && (
@@ -558,6 +704,18 @@ export function FinanceApp() {
           />
         )}
 
+        {activeTab === "savings" && (
+          <SavingsTab
+            entries={savings}
+            deletingIds={deletingIds}
+            onEdit={(e) => {
+              setEditingSaving(e);
+              setIsFormOpen(true);
+            }}
+            onDelete={handleDeleteSaving}
+          />
+        )}
+
         {activeTab === "history" && (
           <TransactionList
             transactions={transactions}
@@ -582,16 +740,33 @@ export function FinanceApp() {
       <BottomSheet
         isOpen={isFormOpen}
         onClose={closeForm}
-        title={editingTransaction ? t.formTitleEdit : t.formTitleAdd}
+        title={
+          activeTab === "savings"
+            ? editingSaving
+              ? t.savingsFormEdit
+              : t.savingsFormAdd
+            : editingTransaction
+              ? t.formTitleEdit
+              : t.formTitleAdd
+        }
       >
-        <TransactionForm
-          onAdd={handleAddTransaction}
-          onUpdate={handleUpdateTransaction}
-          editingTransaction={editingTransaction}
-          onCancelEdit={closeForm}
-          onUpdated={closeForm}
-          defaultDate={selectedDate}
-        />
+        {activeTab === "savings" ? (
+          <SavingsForm
+            key={editingSaving?.id ?? "new"}
+            editing={editingSaving}
+            onSubmit={handleSubmitSaving}
+            onCancel={closeForm}
+          />
+        ) : (
+          <TransactionForm
+            onAdd={handleAddTransaction}
+            onUpdate={handleUpdateTransaction}
+            editingTransaction={editingTransaction}
+            onCancelEdit={closeForm}
+            onUpdated={closeForm}
+            defaultDate={selectedDate}
+          />
+        )}
       </BottomSheet>
 
       <BottomSheet

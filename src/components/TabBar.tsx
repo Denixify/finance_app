@@ -2,7 +2,7 @@ import { useLang } from "./LanguageContext";
 export type AppTab = "overview" | "calendar" | "analytics" | "history";
 
 interface TabBarProps {
-  activeTab: AppTab;
+  activeTab: AppTab | "savings";
   onChangeTab: (tab: AppTab) => void;
   onAddClick: () => void;
 }
